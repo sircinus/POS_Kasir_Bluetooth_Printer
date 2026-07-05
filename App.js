@@ -10,7 +10,12 @@ import {
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Sound from 'react-native-sound';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { print, openDrawer } from './BluetoothManager';
+import {
+  connectPrinter,
+  print,
+  openDrawer,
+  isPrinterConnected,
+} from './BluetoothManager';
 import RNBluetoothClassic from 'react-native-bluetooth-classic';
 import { PermissionsAndroid, Platform } from 'react-native';
 
@@ -46,8 +51,13 @@ function App() {
 
   useEffect(() => {
     requestBluetoothPermissions();
-    autoConnect();
     loadTodayTotal();
+
+    const interval = setInterval(async () => {
+      setConnected(await isPrinterConnected());
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const [amount, setAmount] = useState('');
@@ -63,8 +73,8 @@ function App() {
   const [todayTotal, setTodayTotal] = useState(0);
 
   const [devices, setDevices] = useState([]);
-  const printer = useRef(null);
   const [printing, setPrinting] = useState(false);
+  const [connected, setConnected] = useState(false);
 
   const loadDevices = async () => {
     const bonded = await RNBluetoothClassic.getBondedDevices();
@@ -73,53 +83,14 @@ function App() {
 
   const connect = async device => {
     try {
-      const connected = await RNBluetoothClassic.connectToDevice(
-        device.address,
-      );
-
-      printer.current = connected; // or setPrinter if you're still using state
-
-      await AsyncStorage.setItem('printerAddress', device.address);
+      await connectPrinter(device);
 
       setDevices([]);
 
       Alert.alert('Printer Connected');
-    } catch (e) {
+    } catch {
       Alert.alert('Connection Failed');
     }
-  };
-  const autoConnect = async () => {
-    const address = await AsyncStorage.getItem('printerAddress');
-
-    if (!address) return null;
-
-    try {
-      const connected = await RNBluetoothClassic.connectToDevice(address);
-
-      printer.current = connected;
-
-      return connected;
-    } catch (e) {
-      console.log(e);
-      printer.current = null;
-      return null;
-    }
-  };
-
-  const ensureConnected = async () => {
-    if (printer.current) {
-      try {
-        const connected = await printer.current.isConnected();
-
-        if (connected) {
-          return printer.current;
-        }
-      } catch (e) {
-        printer.current = null;
-      }
-    }
-
-    return await autoConnect();
   };
 
   const doPrintDailyReport = async () => {
@@ -142,16 +113,8 @@ function App() {
 
     report += '------------------------------\n\n\n';
 
-    const connectedPrinter = await ensureConnected();
-
-    if (!connectedPrinter) {
-      Alert.alert('Printer not connected');
-      return;
-    }
-
-    await print(connectedPrinter, report);
-    await openDrawer(connectedPrinter);
-
+    await print(report);
+    await openDrawer();
     await resetTodayTotal();
   };
 
@@ -178,69 +141,16 @@ function App() {
     );
   };
 
-  const saveTodayTotal = async value => {
-    try {
-      await AsyncStorage.setItem('todayTotal', value.toString());
-    } catch (e) {
-      console.log(e);
-    }
-  };
-
-  const loadTodayTotal = async () => {
-    try {
-      const value = await AsyncStorage.getItem('todayTotal');
-
-      if (value !== null) {
-        setTodayTotal(Number(value));
-      }
-    } catch (e) {
-      console.log(e);
-    }
-  };
-
-  const resetTodayTotal = async () => {
-    setTodayTotal(0);
-
-    try {
-      await AsyncStorage.setItem('todayTotal', '0');
-    } catch (e) {
-      console.log(e);
-    }
-  };
-
-  const playKeypadBeep = () => {
-    const sound = new Sound('keypadbeep.mp3', Sound.MAIN_BUNDLE, error => {
-      if (!error) {
-        sound.play(() => {
-          sound.release();
-        });
-      }
-    });
-  };
-
-  const resetTransaction = () => {
-    setAmount('');
-    setSubtotal('');
-    setPayment('');
-    setChange(0);
-
-    setOperator(null);
-    setTotal(0);
-    setWaitingForNewInput(false);
-
-    setPaymentMode(false);
-  };
-
   const printReceipt = async balance => {
     const now = new Date();
 
     let receipt = '';
 
-    receipt += '\x1B\x61\x01'; // Center
+    receipt += '\x1B\x61\x01';
     receipt += 'PINANG MODE\n';
     receipt += 'SALES RECEIPT\n\n';
 
-    receipt += '\x1B\x61\x00'; // Left
+    receipt += '\x1B\x61\x00';
 
     receipt += `Date : ${now.toLocaleDateString('id-ID')}\n`;
     receipt += `Time : ${now.toLocaleTimeString('id-ID')}\n`;
@@ -251,18 +161,10 @@ function App() {
     receipt += `CHANGE : Rp ${balance.toLocaleString('id-ID')}\n`;
 
     receipt += '------------------------------\n';
-
     receipt += '\nThank you!\n\n\n';
 
-    const connectedPrinter = await ensureConnected();
-
-    if (!connectedPrinter) {
-      Alert.alert('Printer not connected');
-      return;
-    }
-
-    await print(connectedPrinter, receipt);
-    await openDrawer(connectedPrinter);
+    await print(receipt);
+    await openDrawer();
   };
 
   const handleKeyPress = async key => {
@@ -391,17 +293,22 @@ function App() {
 
           const newTodayTotal = todayTotal + subtotalAmount;
           setTodayTotal(newTodayTotal);
-          saveTodayTotal(newTodayTotal);
+          await saveTodayTotal(newTodayTotal);
 
           Alert.alert(
             'Transaction Complete',
-            `Change: Rp ${balance.toLocaleString()}`,
+            `Change: Rp ${balance.toLocaleString('id-ID')}`,
           );
+
           resetTransaction();
+        } catch (e) {
+          Alert.alert(
+            'Print Failed',
+            e.message || 'Receipt could not be printed.',
+          );
         } finally {
           setPrinting(false);
         }
-
         break;
       }
       default:
@@ -423,6 +330,59 @@ function App() {
         }
         break;
     }
+  };
+
+  const saveTodayTotal = async value => {
+    try {
+      await AsyncStorage.setItem('todayTotal', value.toString());
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  const loadTodayTotal = async () => {
+    try {
+      const value = await AsyncStorage.getItem('todayTotal');
+
+      if (value !== null) {
+        setTodayTotal(Number(value));
+      }
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  const resetTodayTotal = async () => {
+    setTodayTotal(0);
+
+    try {
+      await AsyncStorage.setItem('todayTotal', '0');
+    } catch (e) {
+      console.log(e);
+    }
+  };
+
+  const playKeypadBeep = () => {
+    const sound = new Sound('keypadbeep.mp3', Sound.MAIN_BUNDLE, error => {
+      if (!error) {
+        sound.play(() => {
+          sound.release();
+        });
+      }
+    });
+  };
+
+  const resetTransaction = () => {
+    setAmount('');
+    setSubtotal('');
+    setPayment('');
+    setChange(0);
+
+    setOperator(null);
+    setTotal(0);
+    setWaitingForNewInput(false);
+
+    setPaymentMode(false);
   };
 
   return (
@@ -478,14 +438,8 @@ function App() {
                   </Text>
                 </TouchableOpacity>
               ))}
-              <Text
-                style={{
-                  color: printer ? 'lime' : 'red',
-                  fontSize: 18,
-                  marginBottom: 10,
-                }}
-              >
-                {printer ? 'Printer Connected' : 'Printer Not Connected'}
+              <Text style={{ color: connected ? 'lime' : 'red' }}>
+                {connected ? 'Printer Connected' : 'Printer Not Connected'}
               </Text>
             </View>
           </ScrollView>
@@ -547,7 +501,7 @@ const styles = StyleSheet.create({
   },
   AmountNumber: {
     textAlign: 'right',
-    fontSize: 50,
+    fontSize: 40,
   },
   KeypadContainer: {
     justifyContent: 'center',
@@ -622,10 +576,10 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   cashGivenText: {
-    fontSize: 30,
+    fontSize: 24,
   },
   changeText: {
-    fontSize: 30,
+    fontSize: 24,
   },
   SubTotalButton: {
     backgroundColor: 'green',
