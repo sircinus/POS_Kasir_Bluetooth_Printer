@@ -51,6 +51,7 @@ function App() {
 
   useEffect(() => {
     requestBluetoothPermissions();
+
     loadTodayTotal();
 
     const interval = setInterval(async () => {
@@ -134,7 +135,13 @@ function App() {
         },
         {
           text: 'Print',
-          onPress: doPrintDailyReport,
+          onPress: async () => {
+            try {
+              await doPrintDailyReport();
+            } catch (e) {
+              Alert.alert('Print Failed', 'Report could not be printed.');
+            }
+          },
         },
       ],
       { cancelable: true },
