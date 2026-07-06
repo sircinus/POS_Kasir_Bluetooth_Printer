@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Alert,
@@ -6,6 +6,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Sound from 'react-native-sound';
@@ -77,6 +79,11 @@ function App() {
   const [printing, setPrinting] = useState(false);
   const [connected, setConnected] = useState(false);
 
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false);
+  const [password, setPassword] = useState('');
+
+  const REPORT_PASSWORD = '5678'; // Change this to your desired password
+
   const loadDevices = async () => {
     const bonded = await RNBluetoothClassic.getBondedDevices();
     setDevices(bonded);
@@ -119,6 +126,24 @@ function App() {
     await resetTodayTotal();
   };
 
+  const verifyPasswordAndPrint = async () => {
+    if (password !== REPORT_PASSWORD) {
+      Alert.alert(
+        'Incorrect Password',
+        'The password you entered is incorrect.',
+      );
+      return;
+    }
+
+    setPasswordModalVisible(false);
+
+    try {
+      await doPrintDailyReport();
+    } catch (e) {
+      Alert.alert('Print Failed', 'Report could not be printed.');
+    }
+  };
+
   const printDailyReport = () => {
     if (todayTotal === 0) {
       Alert.alert('No Sales', 'There are no sales to print today.');
@@ -127,7 +152,9 @@ function App() {
 
     Alert.alert(
       'Print Daily Report',
-      `Print today's report?\n\nTotal Sales: Rp ${todayTotal.toLocaleString()}\n\nToday's total will be reset after printing.`,
+      `Print today's report?\n\nTotal Sales: Rp ${todayTotal.toLocaleString(
+        'id-ID',
+      )}\n\nToday's total will be reset after printing.`,
       [
         {
           text: 'Cancel',
@@ -135,12 +162,9 @@ function App() {
         },
         {
           text: 'Print',
-          onPress: async () => {
-            try {
-              await doPrintDailyReport();
-            } catch (e) {
-              Alert.alert('Print Failed', 'Report could not be printed.');
-            }
+          onPress: () => {
+            setPassword('');
+            setPasswordModalVisible(true);
           },
         },
       ],
@@ -428,21 +452,11 @@ function App() {
               {devices.map(device => (
                 <TouchableOpacity
                   key={device.address}
-                  style={{
-                    backgroundColor: '#666',
-                    padding: 10,
-                    marginTop: 5,
-                    borderRadius: 5,
-                  }}
+                  style={styles.deviceList}
                   onPress={() => connect(device)}
                 >
-                  <Text style={{ color: 'white', fontSize: 18 }}>
-                    {device.name}
-                  </Text>
-
-                  <Text style={{ color: '#ccc', fontSize: 12 }}>
-                    {device.address}
-                  </Text>
+                  <Text style={styles.deviceName}>{device.name}</Text>
+                  <Text style={styles.deviceAddress}>{device.address}</Text>
                 </TouchableOpacity>
               ))}
               <Text style={{ color: connected ? 'lime' : 'red' }}>
@@ -451,6 +465,79 @@ function App() {
             </View>
           </ScrollView>
         </View>
+
+        <Modal visible={passwordModalVisible} transparent animationType="fade">
+          <View
+            style={{
+              flex: 1,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: 'rgba(0,0,0,0.5)',
+            }}
+          >
+            <View
+              style={{
+                width: '85%',
+                backgroundColor: 'white',
+                borderRadius: 10,
+                padding: 20,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: 'bold',
+                  marginBottom: 15,
+                }}
+              >
+                Enter Password
+              </Text>
+
+              <TextInput
+                placeholder="Password"
+                secureTextEntry
+                value={password}
+                onChangeText={setPassword}
+                autoFocus
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#ccc',
+                  borderRadius: 8,
+                  paddingHorizontal: 10,
+                  marginBottom: 20,
+                }}
+              />
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'flex-end',
+                }}
+              >
+                <TouchableOpacity
+                  onPress={() => {
+                    setPasswordModalVisible(false);
+                    setPassword('');
+                  }}
+                  style={{ marginRight: 15 }}
+                >
+                  <Text>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={verifyPasswordAndPrint}>
+                  <Text
+                    style={{
+                      color: 'blue',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    Confirm
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         <View style={styles.KeypadContainer}>
           {keypad.map((row, rowIndex) => (
@@ -591,6 +678,20 @@ const styles = StyleSheet.create({
   SubTotalButton: {
     backgroundColor: 'green',
     borderColor: 'white',
+  },
+  deviceList: {
+    backgroundColor: '#666',
+    padding: 10,
+    marginTop: 5,
+    borderRadius: 5,
+  },
+  deviceName: {
+    color: 'white',
+    fontSize: 18,
+  },
+  deviceAddress: {
+    color: '#ccc',
+    fontSize: 12,
   },
 });
 
