@@ -28,7 +28,7 @@ const keypad = [
   ['8', '5', '2', '00'],
   ['9', '6', '3', '<'],
   ['C', '-', '+', '='],
-  ['REP', 'SUB', 'CA'],
+  ['SUB', 'CA'],
 ];
 
 const formatCurrency = value => {
@@ -82,7 +82,7 @@ function App() {
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [password, setPassword] = useState('');
 
-  const REPORT_PASSWORD = '5678'; // Change this to your desired password
+  const REPORT_PASSWORD = '1234'; // Change this to your desired password
 
   const loadDevices = async () => {
     const bonded = await RNBluetoothClassic.getBondedDevices();
@@ -140,7 +140,7 @@ function App() {
     try {
       await doPrintDailyReport();
     } catch (e) {
-      Alert.alert('Print Failed', 'Report could not be printed.');
+      Alert.alert('Print Failed');
     }
   };
 
@@ -326,10 +326,7 @@ function App() {
           setTodayTotal(newTodayTotal);
           await saveTodayTotal(newTodayTotal);
 
-          Alert.alert(
-            'Transaction Complete',
-            `Change: Rp ${balance.toLocaleString('id-ID')}`,
-          );
+          Alert.alert(`Change: Rp ${balance.toLocaleString('id-ID')}`);
 
           resetTransaction();
         } catch (e) {
@@ -441,29 +438,37 @@ function App() {
               </>
             )}
           </View>
-          <ScrollView>
-            <View style={styles.featureContainer}>
-              <TouchableOpacity
-                style={styles.featureButtons}
-                onPress={loadDevices}
-              >
-                <Text style={styles.featureText}>Connect Printer</Text>
+          <View>
+            <View style={styles.printDailyReportContainer}>
+              <TouchableOpacity onPress={printDailyReport}>
+                <Text style={{ textAlign: 'center', fontSize: 24 }}>
+                  Print Daily Report
+                </Text>
               </TouchableOpacity>
-              {devices.map(device => (
-                <TouchableOpacity
-                  key={device.address}
-                  style={styles.deviceList}
-                  onPress={() => connect(device)}
-                >
-                  <Text style={styles.deviceName}>{device.name}</Text>
-                  <Text style={styles.deviceAddress}>{device.address}</Text>
-                </TouchableOpacity>
-              ))}
-              <Text style={{ color: connected ? 'lime' : 'red' }}>
-                {connected ? 'Printer Connected' : 'Printer Not Connected'}
-              </Text>
             </View>
-          </ScrollView>
+            <ScrollView>
+              <View style={styles.featureContainer}>
+                <TouchableOpacity
+                  style={styles.featureButtons}
+                  onPress={loadDevices}
+                >
+                  <Text style={styles.featureText}>Connect To Printer</Text>
+                </TouchableOpacity>
+                {devices.map(device => (
+                  <TouchableOpacity
+                    key={device.address}
+                    style={styles.deviceList}
+                    onPress={() => connect(device)}
+                  >
+                    <Text style={styles.deviceName}>{device.name}</Text>
+                  </TouchableOpacity>
+                ))}
+                <Text style={{ color: connected ? 'lime' : 'red' }}>
+                  {connected ? 'Printer Connected' : 'Printer Not Connected'}
+                </Text>
+              </View>
+            </ScrollView>
+          </View>
         </View>
 
         <Modal visible={passwordModalVisible} transparent animationType="fade">
@@ -488,6 +493,7 @@ function App() {
                   fontSize: 18,
                   fontWeight: 'bold',
                   marginBottom: 15,
+                  color: 'black',
                 }}
               >
                 Enter Password
@@ -541,7 +547,13 @@ function App() {
 
         <View style={styles.KeypadContainer}>
           {keypad.map((row, rowIndex) => (
-            <View key={rowIndex} style={styles.KeypadRow}>
+            <View
+              key={rowIndex}
+              style={[
+                styles.KeypadRow,
+                rowIndex === keypad.length - 1 && { marginTop: 'auto' },
+              ]}
+            >
               {row.map(key => (
                 <TouchableOpacity
                   key={key}
@@ -576,7 +588,7 @@ function App() {
 const styles = StyleSheet.create({
   KeypadNumber: {
     color: '#000',
-    fontSize: 40,
+    fontSize: 48,
     textAlign: 'center',
   },
   KeypadRow: {
@@ -590,16 +602,15 @@ const styles = StyleSheet.create({
   LeftContainer: {
     backgroundColor: 'black',
     width: '45%',
-    padding: 20,
+    padding: 10,
     justifyContent: 'space-between',
   },
   AmountNumber: {
     textAlign: 'right',
-    fontSize: 40,
+    fontSize: 64,
   },
   KeypadContainer: {
     justifyContent: 'center',
-    alignItems: 'flex-end',
     width: '55%',
     padding: 10,
     backgroundColor: 'black',
@@ -607,6 +618,8 @@ const styles = StyleSheet.create({
   },
   KeypadButton: {
     marginHorizontal: 5,
+    width: 90,
+    height: 120,
     justifyContent: 'center',
     paddingHorizontal: 15,
     paddingVertical: 10,
@@ -624,11 +637,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'tomato',
     marginTop: 10,
     borderRadius: 5,
-    padding: 5,
-    width: '70%',
+    padding: 10,
   },
   featureText: {
-    fontSize: 16,
+    fontSize: 24,
     textAlign: 'center',
   },
   OperatorButton: {
@@ -644,16 +656,10 @@ const styles = StyleSheet.create({
   CashDrawerButton: {
     backgroundColor: 'orange',
     borderColor: 'white',
+    width: 90,
   },
-  OperatorText: {
-    fontSize: 20,
-  },
-  ClearText: {
-    fontSize: 20,
-  },
-
   CashDrawerText: {
-    fontSize: 40,
+    fontSize: 28,
     fontWeight: 'bold',
     color: 'white',
   },
@@ -670,10 +676,10 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   cashGivenText: {
-    fontSize: 24,
+    fontSize: 40,
   },
   changeText: {
-    fontSize: 24,
+    fontSize: 40,
   },
   SubTotalButton: {
     backgroundColor: 'green',
@@ -692,6 +698,11 @@ const styles = StyleSheet.create({
   deviceAddress: {
     color: '#ccc',
     fontSize: 12,
+  },
+  printDailyReportContainer: {
+    backgroundColor: 'cornflowerblue',
+    borderRadius: 5,
+    padding: 10,
   },
 });
 
