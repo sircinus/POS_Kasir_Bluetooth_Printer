@@ -107,7 +107,9 @@ function App() {
     let report = '';
 
     report += '\x1B\x61\x01';
-    report += 'DAILY REPORT\n\n';
+    report += 'DAILY REPORT\n';
+    report += 'PINANG MODE\n';
+    report += 'JAM TANGAN & ACCESSORIES\n\n';
 
     report += '\x1B\x61\x00';
 
@@ -179,6 +181,7 @@ function App() {
 
     receipt += '\x1B\x61\x01';
     receipt += 'PINANG MODE\n';
+    report += 'JAM TANGAN & ACCESSORIES\n';
     receipt += 'SALES RECEIPT\n\n';
 
     receipt += '\x1B\x61\x00';
