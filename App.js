@@ -10,7 +10,6 @@ import {
   TextInput,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import Sound from 'react-native-sound';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   connectPrinter,
@@ -20,8 +19,6 @@ import {
 } from './BluetoothManager';
 import RNBluetoothClassic from 'react-native-bluetooth-classic';
 import { PermissionsAndroid, Platform } from 'react-native';
-
-Sound.setCategory('Playback');
 
 const keypad = [
   ['7', '4', '1', '0'],
@@ -67,23 +64,44 @@ function App() {
   const [total, setTotal] = useState(0);
   const [operator, setOperator] = useState(null);
   const [waitingForNewInput, setWaitingForNewInput] = useState(false);
-
   const [subtotal, setSubtotal] = useState('');
   const [payment, setPayment] = useState('');
   const [change, setChange] = useState(0);
-
   const [paymentMode, setPaymentMode] = useState(false);
   const [todayTotal, setTodayTotal] = useState(0);
-
   const [devices, setDevices] = useState([]);
   const [printing, setPrinting] = useState(false);
   const [connected, setConnected] = useState(false);
-
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [password, setPassword] = useState('');
   const [showPrinterList, setShowPrinterList] = useState(false);
 
-  const REPORT_PASSWORD = '1234'; // Change this to your desired password
+  const REPORT_PASSWORD = '1234';
+
+  const getPreviewTotal = () => {
+    if (paymentMode) {
+      return formatCurrency(subtotal);
+    }
+
+    if (amount === '') {
+      return formatCurrency(0);
+    }
+
+    const value = Number(amount || 0);
+
+    if (operator === null) {
+      return formatCurrency(value);
+    }
+
+    if (waitingForNewInput) {
+      // User has pressed + or -, waiting for next number
+      return formatCurrency(total);
+    }
+
+    const result = operator === '+' ? total + value : total - value;
+
+    return formatCurrency(result);
+  };
 
   const loadDevices = async () => {
     if (showPrinterList) {
@@ -227,7 +245,6 @@ function App() {
   };
 
   const handleKeyPress = async key => {
-    playKeypadBeep();
     switch (key) {
       case '<':
         if (paymentMode) {
@@ -245,11 +262,9 @@ function App() {
           setOperator(null);
         }
         break;
-
       case 'REP':
         printDailyReport();
         break;
-
       case 'SUB':
         {
           if (amount === '') return;
@@ -283,7 +298,6 @@ function App() {
         setChange(0);
         setPaymentMode(true);
         break;
-
       case '+':
       case '-': {
         if (waitingForNewInput) {
@@ -305,8 +319,21 @@ function App() {
         setWaitingForNewInput(true);
         break;
       }
-
       case '=': {
+        // User pressed "=" immediately after "+" or "-"
+        if (waitingForNewInput) {
+          setOperator(null);
+          setTotal(0);
+          setWaitingForNewInput(false);
+
+          break;
+        }
+
+        // Already evaluated once
+        if (operator === null) {
+          break;
+        }
+
         const value = Number(amount || 0);
         let result = total;
 
@@ -314,17 +341,15 @@ function App() {
           result = total + value;
         } else if (operator === '-') {
           result = total - value;
-        } else {
-          result = value;
         }
 
         setAmount(result.toString());
         setTotal(0);
         setOperator(null);
         setWaitingForNewInput(false);
+
         break;
       }
-
       case 'CA': {
         if (payment === '') {
           Alert.alert('Enter payment amount');
@@ -418,16 +443,6 @@ function App() {
     }
   };
 
-  const playKeypadBeep = () => {
-    const sound = new Sound('keypadbeep.mp3', Sound.MAIN_BUNDLE, error => {
-      if (!error) {
-        sound.play(() => {
-          sound.release();
-        });
-      }
-    });
-  };
-
   const resetTransaction = () => {
     setAmount('');
     setSubtotal('');
@@ -447,9 +462,11 @@ function App() {
         <View style={styles.LeftContainer}>
           <View style={styles.allNumberContainer}>
             <View style={styles.AmountContainer}>
-              <Text style={styles.AmountNumber}>{formatCurrency(amount)}</Text>
+              <Text style={styles.AmountNumber}>{amount}</Text>
             </View>
-
+            <View style={styles.previewContainer}>
+              <Text style={styles.previewText}>{getPreviewTotal()}</Text>
+            </View>
             {paymentMode && (
               <>
                 <View style={styles.cashGivenContainer}>
@@ -466,71 +483,34 @@ function App() {
               </>
             )}
           </View>
-          <View>
+
+          <View style={styles.bottomLeftContainer}>
             <View style={styles.printDailyReportContainer}>
               <TouchableOpacity onPress={printDailyReport}>
-                <Text style={{ textAlign: 'center', fontSize: 24 }}>
+                <Text style={styles.printDailyReportText}>
                   Print Daily Report
                 </Text>
               </TouchableOpacity>
             </View>
-            <ScrollView>
-              <View style={styles.featureContainer}>
-                <TouchableOpacity
-                  style={styles.featureButtons}
-                  onPress={loadDevices}
+            <View style={styles.featureContainer}>
+              <TouchableOpacity onPress={loadDevices}>
+                <Text
+                  style={[
+                    styles.printerDeviceText,
+                    { backgroundColor: connected ? 'lime' : 'red' },
+                  ]}
                 >
-                  <Text style={styles.featureText}>
-                    {showPrinterList ? 'Hide Printers' : 'Connect To Printer'}
-                  </Text>
-                </TouchableOpacity>
-
-                {showPrinterList &&
-                  devices.map(device => (
-                    <TouchableOpacity
-                      key={device.address}
-                      style={styles.deviceList}
-                      onPress={() => connect(device)}
-                    >
-                      <Text style={styles.deviceName}>{device.name}</Text>
-                    </TouchableOpacity>
-                  ))}
-
-                <Text style={{ color: connected ? 'lime' : 'red' }}>
-                  {connected ? 'Printer Connected' : 'Printer Not Connected'}
+                  Connect To Printer
                 </Text>
-              </View>
-            </ScrollView>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
         <Modal visible={passwordModalVisible} transparent animationType="fade">
-          <View
-            style={{
-              flex: 1,
-              justifyContent: 'center',
-              alignItems: 'center',
-              backgroundColor: 'rgba(0,0,0,0.5)',
-            }}
-          >
-            <View
-              style={{
-                width: '85%',
-                backgroundColor: 'white',
-                borderRadius: 10,
-                padding: 20,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 18,
-                  fontWeight: 'bold',
-                  marginBottom: 15,
-                  color: 'black',
-                }}
-              >
-                Enter Password
-              </Text>
+          <View style={styles.modalBackground}>
+            <View style={styles.modalContainer}>
+              <Text style={styles.modalTitleText}>Enter Password</Text>
 
               <TextInput
                 placeholder="Password"
@@ -538,42 +518,53 @@ function App() {
                 value={password}
                 onChangeText={setPassword}
                 autoFocus
-                style={{
-                  borderWidth: 1,
-                  borderColor: '#ccc',
-                  borderRadius: 8,
-                  paddingHorizontal: 10,
-                  marginBottom: 20,
-                }}
+                style={styles.modalTextInput}
               />
 
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'flex-end',
-                }}
-              >
+              <View style={styles.modalBottomLayout}>
                 <TouchableOpacity
                   onPress={() => {
                     setPasswordModalVisible(false);
                     setPassword('');
                   }}
-                  style={{ marginRight: 15 }}
                 >
                   <Text>Cancel</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={verifyPasswordAndPrint}>
-                  <Text
-                    style={{
-                      color: 'blue',
-                      fontWeight: 'bold',
-                    }}
-                  >
-                    Confirm
-                  </Text>
+                  <Text style={styles.modalConfirmText}>Confirm</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal visible={showPrinterList} transparent animationType="fade">
+          <View style={styles.modalBackground}>
+            <View style={styles.printerModalContainer}>
+              <Text style={styles.modalTitleText}>Select Printer</Text>
+
+              <ScrollView>
+                {devices.map(device => (
+                  <TouchableOpacity
+                    key={device.address}
+                    style={styles.deviceList}
+                    onPress={() => {
+                      connect(device);
+                      setShowPrinterList(false);
+                    }}
+                  >
+                    <Text style={styles.deviceName}>{device.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setShowPrinterList(false)}
+              >
+                <Text>Close</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -627,17 +618,15 @@ const styles = StyleSheet.create({
   KeypadRow: {
     flexDirection: 'column',
     gap: '3%',
-    marginHorizontal: '1.5%',
+    marginHorizontal: '1%',
   },
   container: {
-    flex: 1,
     flexDirection: 'row',
   },
   LeftContainer: {
     backgroundColor: 'black',
-    width: '45%',
+    width: '50%',
     padding: '1%',
-    justifyContent: 'space-between',
   },
   AmountNumber: {
     textAlign: 'right',
@@ -645,7 +634,7 @@ const styles = StyleSheet.create({
   },
   KeypadContainer: {
     justifyContent: 'center',
-    width: '55%',
+    width: '50%',
     padding: '1%',
     backgroundColor: 'black',
     flexDirection: 'row',
@@ -662,14 +651,26 @@ const styles = StyleSheet.create({
   },
   AmountContainer: {
     backgroundColor: 'white',
-    padding: '5%',
+    padding: '3%',
     borderRadius: 10,
+  },
+  bottomLeftContainer: {
+    justifyContent: 'space-between',
+    flexDirection: 'row',
+    position: 'absolute',
+    left: '2%',
+    bottom: '1%',
+    width: '100%',
+    padding: '2%',
+    borderRadius: 5,
+    alignItems: 'center',
   },
   featureButtons: {
     backgroundColor: 'tomato',
     marginTop: '3%',
     borderRadius: 5,
-    padding: '3%',
+    padding: '2%',
+    width: '50%',
   },
   featureText: {
     fontSize: 24,
@@ -679,12 +680,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F5E9',
     borderColor: '#2E7D32',
   },
-
   ClearButton: {
     backgroundColor: '#FFEBEE',
     borderColor: '#C62828',
   },
-
   CashDrawerButton: {
     backgroundColor: 'orange',
     borderColor: 'white',
@@ -708,10 +707,10 @@ const styles = StyleSheet.create({
     padding: '2%',
   },
   cashGivenText: {
-    fontSize: 40,
+    fontSize: 24,
   },
   changeText: {
-    fontSize: 40,
+    fontSize: 24,
   },
   SubTotalButton: {
     backgroundColor: 'green',
@@ -734,7 +733,96 @@ const styles = StyleSheet.create({
   printDailyReportContainer: {
     backgroundColor: 'cornflowerblue',
     borderRadius: 5,
+    padding: '2%',
+    width: '48%',
+  },
+  printDailyReportText: {
+    textAlign: 'center',
+    fontSize: 20,
+    color: 'white',
+  },
+  modalTextInput: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    marginBottom: 20,
+  },
+  modalBackground: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    width: '30%',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+  },
+  modalTitleText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    color: 'black',
+  },
+  modalBottomLayout: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalConfirmText: {
+    color: 'blue',
+    fontWeight: 'bold',
+  },
+  featureContainer: {
+    width: '48%',
+    borderRadius: 5,
+  },
+  printerModalContainer: {
+    width: '65%',
+    height: '70%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+  },
+  deviceList: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  deviceName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  modalCloseButton: {
+    marginTop: 15,
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#eee',
+    borderRadius: 8,
+  },
+  printerDeviceText: {
+    color: 'white',
+    fontSize: 20,
+    textAlign: 'center',
+    verticalAlign: 'middle',
     padding: '3%',
+    height: '100%',
+    borderRadius: 5,
+  },
+  allNumberContainer: {
+    height: '75%',
+    gap: '1%',
+  },
+  previewContainer: {
+    backgroundColor: 'gray',
+    height: '20%',
+    alignItems: 'flex-end',
+    borderRadius: 10,
+    padding: '3%',
+  },
+  previewText: {
+    fontSize: 24,
+    color: 'white',
   },
 });
 
