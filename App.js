@@ -81,12 +81,19 @@ function App() {
 
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [password, setPassword] = useState('');
+  const [showPrinterList, setShowPrinterList] = useState(false);
 
   const REPORT_PASSWORD = '1234'; // Change this to your desired password
 
   const loadDevices = async () => {
+    if (showPrinterList) {
+      setShowPrinterList(false);
+      return;
+    }
+
     const bonded = await RNBluetoothClassic.getBondedDevices();
     setDevices(bonded);
+    setShowPrinterList(true);
   };
 
   const connect = async device => {
@@ -106,22 +113,31 @@ function App() {
 
     let report = '';
 
-    report += '\x1B\x61\x01';
-    report += 'DAILY REPORT\n';
+    report += '\x1B\x40'; // Initialize
+    report += '\n\n\n';
+    report += '\x1B\x61\x01'; // Center
+    report += '\x1B\x45\x01'; // Bold ON
+    report += '\x1D\x21\x11'; // Double width & height
+
     report += 'PINANG MODE\n';
+
+    report += '\x1D\x21\x00'; // Normal size
     report += 'JAM TANGAN & ACCESSORIES\n\n';
+
+    report += '\x1B\x45\x00'; // Bold OFF
+    report += '\x1B\x61\x00'; // Left align
 
     report += '\x1B\x61\x00';
 
     report += `Date : ${now.toLocaleDateString('id-ID')}\n`;
     report += `Time : ${now.toLocaleTimeString('id-ID')}\n`;
 
-    report += '------------------------------\n';
+    report += '--------------------------------\n';
 
-    report += `TOTAL SALES\n`;
+    report += `TOTAL DAILY SALES\n`;
     report += `Rp ${todayTotal.toLocaleString('id-ID')}\n`;
 
-    report += '------------------------------\n\n\n';
+    report += '--------------------------------\n\n\n\n\n';
 
     await print(report);
     await openDrawer();
@@ -179,23 +195,32 @@ function App() {
 
     let receipt = '';
 
-    receipt += '\x1B\x61\x01';
+    receipt += '\x1B\x40'; // Initialize
+    receipt += '\n\n\n';
+    receipt += '\x1B\x61\x01'; // Center
+    receipt += '\x1B\x45\x01'; // Bold ON
+    receipt += '\x1D\x21\x11'; // Double width & height
+
     receipt += 'PINANG MODE\n';
-    report += 'JAM TANGAN & ACCESSORIES\n';
-    receipt += 'SALES RECEIPT\n\n';
+
+    receipt += '\x1D\x21\x00'; // Normal size
+    receipt += 'JAM TANGAN & ACCESSORIES\n\n';
+
+    receipt += '\x1B\x45\x00'; // Bold OFF
+    receipt += '\x1B\x61\x00'; // Left align
 
     receipt += '\x1B\x61\x00';
-
     receipt += `Date : ${now.toLocaleDateString('id-ID')}\n`;
     receipt += `Time : ${now.toLocaleTimeString('id-ID')}\n`;
-    receipt += '------------------------------\n';
+    receipt += '--------------------------------\n';
 
     receipt += `TOTAL  : Rp ${Number(subtotal).toLocaleString('id-ID')}\n`;
     receipt += `CASH   : Rp ${Number(payment).toLocaleString('id-ID')}\n`;
     receipt += `CHANGE : Rp ${balance.toLocaleString('id-ID')}\n`;
 
-    receipt += '------------------------------\n';
-    receipt += '\nThank you!\n\n\n';
+    receipt += '--------------------------------\n';
+    receipt += '\x1B\x61\x01';
+    receipt += '\nThank you!\n\n\n\n\n';
 
     await print(receipt);
     await openDrawer();
@@ -455,17 +480,22 @@ function App() {
                   style={styles.featureButtons}
                   onPress={loadDevices}
                 >
-                  <Text style={styles.featureText}>Connect To Printer</Text>
+                  <Text style={styles.featureText}>
+                    {showPrinterList ? 'Hide Printers' : 'Connect To Printer'}
+                  </Text>
                 </TouchableOpacity>
-                {devices.map(device => (
-                  <TouchableOpacity
-                    key={device.address}
-                    style={styles.deviceList}
-                    onPress={() => connect(device)}
-                  >
-                    <Text style={styles.deviceName}>{device.name}</Text>
-                  </TouchableOpacity>
-                ))}
+
+                {showPrinterList &&
+                  devices.map(device => (
+                    <TouchableOpacity
+                      key={device.address}
+                      style={styles.deviceList}
+                      onPress={() => connect(device)}
+                    >
+                      <Text style={styles.deviceName}>{device.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+
                 <Text style={{ color: connected ? 'lime' : 'red' }}>
                   {connected ? 'Printer Connected' : 'Printer Not Connected'}
                 </Text>
@@ -591,12 +621,13 @@ function App() {
 const styles = StyleSheet.create({
   KeypadNumber: {
     color: '#000',
-    fontSize: 48,
+    fontSize: 40,
     textAlign: 'center',
   },
   KeypadRow: {
     flexDirection: 'column',
-    gap: 10,
+    gap: '3%',
+    marginHorizontal: '1.5%',
   },
   container: {
     flex: 1,
@@ -605,42 +636,40 @@ const styles = StyleSheet.create({
   LeftContainer: {
     backgroundColor: 'black',
     width: '45%',
-    padding: 10,
+    padding: '1%',
     justifyContent: 'space-between',
   },
   AmountNumber: {
     textAlign: 'right',
-    fontSize: 64,
+    fontSize: 50,
   },
   KeypadContainer: {
     justifyContent: 'center',
     width: '55%',
-    padding: 10,
+    padding: '1%',
     backgroundColor: 'black',
     flexDirection: 'row',
   },
   KeypadButton: {
-    marginHorizontal: 5,
-    width: 90,
-    height: 120,
+    minWidth: '18%',
+    height: '23%',
     justifyContent: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
     backgroundColor: '#fff',
     borderColor: 'grey',
+    padding: '2%',
     borderWidth: 2,
     borderRadius: 5,
   },
   AmountContainer: {
     backgroundColor: 'white',
-    padding: 10,
+    padding: '5%',
     borderRadius: 10,
   },
   featureButtons: {
     backgroundColor: 'tomato',
-    marginTop: 10,
+    marginTop: '3%',
     borderRadius: 5,
-    padding: 10,
+    padding: '3%',
   },
   featureText: {
     fontSize: 24,
@@ -659,7 +688,8 @@ const styles = StyleSheet.create({
   CashDrawerButton: {
     backgroundColor: 'orange',
     borderColor: 'white',
-    width: 90,
+    width: '100%',
+    marginBottom: '-5%',
   },
   CashDrawerText: {
     fontSize: 28,
@@ -668,15 +698,14 @@ const styles = StyleSheet.create({
   },
   cashGivenContainer: {
     backgroundColor: 'springgreen',
-    marginTop: 10,
+    marginVertical: '2%',
     borderRadius: 5,
-    padding: 10,
+    padding: '2%',
   },
   changeContainer: {
     backgroundColor: 'orange',
-    marginVertical: 10,
     borderRadius: 5,
-    padding: 10,
+    padding: '2%',
   },
   cashGivenText: {
     fontSize: 40,
@@ -690,8 +719,8 @@ const styles = StyleSheet.create({
   },
   deviceList: {
     backgroundColor: '#666',
-    padding: 10,
-    marginTop: 5,
+    padding: '2%',
+    marginTop: '2%',
     borderRadius: 5,
   },
   deviceName: {
@@ -705,7 +734,7 @@ const styles = StyleSheet.create({
   printDailyReportContainer: {
     backgroundColor: 'cornflowerblue',
     borderRadius: 5,
-    padding: 10,
+    padding: '3%',
   },
 });
 
