@@ -462,7 +462,7 @@ function App() {
         <View style={styles.LeftContainer}>
           <View style={styles.allNumberContainer}>
             <View style={styles.AmountContainer}>
-              <Text style={styles.AmountNumber}>{amount}</Text>
+              <Text style={styles.AmountNumber}>{formatCurrency(amount)}</Text>
             </View>
             <View style={styles.previewContainer}>
               <Text style={styles.previewText}>{getPreviewTotal()}</Text>
