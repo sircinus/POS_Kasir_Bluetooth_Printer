@@ -20,17 +20,16 @@ import {
 import RNBluetoothClassic from 'react-native-bluetooth-classic';
 import { PermissionsAndroid, Platform } from 'react-native';
 
+const formatCurrency = value => {
+  return `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
+};
+
 const keypad = [
   ['7', '4', '1', '0'],
   ['8', '5', '2', '00'],
   ['9', '6', '3', '<'],
-  ['C', '-', '+', '='],
-  ['SUB', 'CA'],
+  ['C', '-', '+', 'SUB'],
 ];
-
-const formatCurrency = value => {
-  return `Rp ${Number(value || 0).toLocaleString('id-ID')}`;
-};
 
 function App() {
   const requestBluetoothPermissions = async () => {
@@ -78,7 +77,7 @@ function App() {
 
   const REPORT_PASSWORD = '1234';
 
-  const getPreviewTotal = () => {
+  const getPreviewText = () => {
     if (paymentMode) {
       return formatCurrency(subtotal);
     }
@@ -87,20 +86,23 @@ function App() {
       return formatCurrency(0);
     }
 
-    const value = Number(amount || 0);
+    const value = Number(amount);
 
+    // Just typing a number
     if (operator === null) {
       return formatCurrency(value);
     }
 
+    // User pressed + or -, waiting for next input
     if (waitingForNewInput) {
-      // User has pressed + or -, waiting for next number
-      return formatCurrency(total);
+      return `${formatCurrency(total)} ${operator}`;
     }
 
     const result = operator === '+' ? total + value : total - value;
 
-    return formatCurrency(result);
+    return `${formatCurrency(total)} ${operator} ${formatCurrency(
+      value,
+    )} = ${formatCurrency(result)}`;
   };
 
   const loadDevices = async () => {
@@ -265,39 +267,39 @@ function App() {
       case 'REP':
         printDailyReport();
         break;
-      case 'SUB':
-        {
-          if (amount === '') return;
+      case 'SUB': {
+        if (amount === '' && !waitingForNewInput) return;
 
+        let result;
+
+        if (waitingForNewInput) {
+          // User pressed + or - then immediately SUB
+          result = total;
+        } else {
           const value = Number(amount || 0);
-          let result = value;
 
           if (operator === '+') {
             result = total + value;
           } else if (operator === '-') {
             result = total - value;
+          } else {
+            result = value;
           }
-
-          setAmount(result.toString()); // Update display
-          setSubtotal(result.toString()); // Use calculated subtotal
-
-          setPayment('');
-          setChange(0);
-
-          setTotal(0);
-          setOperator(null);
-          setWaitingForNewInput(false);
-
-          setPaymentMode(true);
-          break;
         }
-        if (amount === '') return;
 
-        setSubtotal(amount);
+        setAmount(result.toString());
+        setSubtotal(result.toString());
+
         setPayment('');
         setChange(0);
+
+        setTotal(0);
+        setOperator(null);
+        setWaitingForNewInput(false);
+
         setPaymentMode(true);
         break;
+      }
       case '+':
       case '-': {
         if (waitingForNewInput) {
@@ -317,37 +319,6 @@ function App() {
 
         setOperator(key);
         setWaitingForNewInput(true);
-        break;
-      }
-      case '=': {
-        // User pressed "=" immediately after "+" or "-"
-        if (waitingForNewInput) {
-          setOperator(null);
-          setTotal(0);
-          setWaitingForNewInput(false);
-
-          break;
-        }
-
-        // Already evaluated once
-        if (operator === null) {
-          break;
-        }
-
-        const value = Number(amount || 0);
-        let result = total;
-
-        if (operator === '+') {
-          result = total + value;
-        } else if (operator === '-') {
-          result = total - value;
-        }
-
-        setAmount(result.toString());
-        setTotal(0);
-        setOperator(null);
-        setWaitingForNewInput(false);
-
         break;
       }
       case 'CA': {
@@ -465,7 +436,7 @@ function App() {
               <Text style={styles.AmountNumber}>{formatCurrency(amount)}</Text>
             </View>
             <View style={styles.previewContainer}>
-              <Text style={styles.previewText}>{getPreviewTotal()}</Text>
+              <Text style={styles.previewText}>{getPreviewText()}</Text>
             </View>
             {paymentMode && (
               <>
@@ -578,29 +549,32 @@ function App() {
                 rowIndex === keypad.length - 1 && { marginTop: 'auto' },
               ]}
             >
-              {row.map(key => (
-                <TouchableOpacity
-                  key={key}
-                  style={[
-                    styles.KeypadButton,
-                    key === 'C' && styles.ClearButton,
-                    key === 'CA' && styles.CashDrawerButton,
-                    key === 'SUB' && styles.SubTotalButton,
-                    key === 'REP' && styles.ClearButton,
-                  ]}
-                  onPress={() => handleKeyPress(key)}
-                >
-                  <Text
+              {row.map(key => {
+                const displayKey = key === 'SUB' && paymentMode ? 'CA' : key;
+
+                return (
+                  <TouchableOpacity
+                    key={key}
                     style={[
-                      styles.KeypadNumber,
-                      key === 'CA' && styles.CashDrawerText,
-                      key === 'SUB' && styles.CashDrawerText,
+                      styles.KeypadButton,
+                      displayKey === 'C' && styles.ClearButton,
+                      displayKey === 'CA' && styles.CashDrawerButton,
+                      displayKey === 'SUB' && styles.SubTotalButton,
                     ]}
+                    onPress={() => handleKeyPress(displayKey)}
                   >
-                    {key}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        styles.KeypadNumber,
+                        (displayKey === 'CA' || displayKey === 'SUB') &&
+                          styles.CashDrawerText,
+                      ]}
+                    >
+                      {displayKey}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           ))}
         </View>
@@ -625,7 +599,7 @@ const styles = StyleSheet.create({
   },
   LeftContainer: {
     backgroundColor: 'black',
-    width: '50%',
+    width: '55%',
     padding: '1%',
   },
   AmountNumber: {
@@ -634,13 +608,13 @@ const styles = StyleSheet.create({
   },
   KeypadContainer: {
     justifyContent: 'center',
-    width: '50%',
+    width: '45%',
     padding: '1%',
     backgroundColor: 'black',
     flexDirection: 'row',
   },
   KeypadButton: {
-    minWidth: '18%',
+    minWidth: '23%',
     height: '23%',
     justifyContent: 'center',
     backgroundColor: '#fff',
@@ -687,8 +661,6 @@ const styles = StyleSheet.create({
   CashDrawerButton: {
     backgroundColor: 'orange',
     borderColor: 'white',
-    width: '100%',
-    marginBottom: '-5%',
   },
   CashDrawerText: {
     fontSize: 28,
@@ -821,7 +793,7 @@ const styles = StyleSheet.create({
     padding: '3%',
   },
   previewText: {
-    fontSize: 24,
+    fontSize: 20,
     color: 'white',
   },
 });
